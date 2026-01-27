@@ -24,9 +24,10 @@ def convert_to_mbox(mailbox_folder):
             mbox_file.add(message)
             mbox_file.flush()
 
-def process_eml_file(eml_file, output_dir='output'):
+def process_eml_file(file_name, input_dir, output_dir='output'):
     """Обработка EML файла с сохранением вложений"""
-    
+    eml_file = os.path.join(input_dir, file_name)
+
     # Создаем выходную директорию
     os.makedirs(output_dir, exist_ok=True)
     
@@ -73,16 +74,16 @@ def process_eml_file(eml_file, output_dir='output'):
         text_body = payload.decode(charset, errors='ignore')
     
     if head:
-        with open(os.path.join(output_dir, 'message.txt'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(output_dir, f'{file_name}.txt'), 'w', encoding='utf-8') as f:
             f.write(head)
     
     # Сохраняем текст письма
     if text_body:
-        with open(os.path.join(output_dir, 'message.txt'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(output_dir, f'{file_name}.txt'), 'w', encoding='utf-8') as f:
             f.write(head + text_body)
     
     if html_body:
-        with open(os.path.join(output_dir, 'message.html'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(output_dir, f'{file_name}.html'), 'w', encoding='utf-8') as f:
             f.write(head + html_body)
     
     return {
@@ -248,6 +249,6 @@ if __name__ == '__main__':
 
     for filepath in os.listdir(mailbox_folder_path):
         # Чтение EML файла
-        process_eml_file(os.path.join(mailbox_folder_path, filepath))
+        process_eml_file(filepath, input_dir=mailbox_folder_path, output_dir=os.path.join('txt', mailbox_folder_path))
     
     print('All mailboxes and their contents have been decoded successfully!')
