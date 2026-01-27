@@ -145,24 +145,25 @@ def process_eml_file(file_name, input_dir, output_dir='output'):
             content_type = part.get_content_type()
             
             if content_type == 'text/plain':
-                payload = part.get_payload(decode=True)
-                charset = part.get_content_charset() or 'utf-8'
-                text_body = payload.decode(charset, errors='ignore')
+                    payload = part.get_payload(decode=True)
+                    charset = part.get_content_charset() or 'utf-8'
+                    text_body = payload.decode(charset, errors='ignore')
                 
             elif content_type == 'text/html':
-                payload = part.get_payload(decode=True)
-                charset = part.get_content_charset() or 'utf-8'
-                html_body = payload.decode(charset, errors='ignore')
-                html_body = remove_styles_from_html(html_body)
-            # elif part.get_filename():  # Вложение
-            #     filename = part.get_filename()
-            #     content = part.get_payload(decode=True)
-                
-            #     # Сохраняем вложение
-            #     filepath = os.path.join(output_dir, filename)
-            #     with open(filepath, 'wb') as f:
-            #         f.write(content)
-            #     print(f"Сохранено вложение: {filename}")
+                    payload = part.get_payload(decode=True)
+                    charset = part.get_content_charset() or 'utf-8'
+                    html_body = payload.decode(charset, errors='ignore')
+                    html_body = remove_styles_from_html(html_body)
+            elif part.get_filename():  # Вложение
+                if args.files:
+                    filename = part.get_filename()
+                    content = part.get_payload(decode=True)
+                    
+                    # Сохраняем вложение
+                    filepath = os.path.join(output_dir, filename)
+                    with open(filepath, 'wb') as f:
+                        f.write(content)
+                    print(f"Сохранено вложение: {filename}")
     else:
         # Не multipart письмо
         payload = msg.get_payload(decode=True)
@@ -174,11 +175,11 @@ def process_eml_file(file_name, input_dir, output_dir='output'):
             f.write(head)
     
     # Сохраняем текст письма
-    if text_body:
+    if text_body and args.txt:
         with open(os.path.join(output_dir, f'{file_name}.txt'), 'w', encoding='utf-8') as f:
             f.write(head + text_body)
     
-    if html_body:
+    if html_body and args.html:
         with open(os.path.join(output_dir, f'{file_name}.html'), 'w', encoding='utf-8') as f:
             f.write(head + html_body)
     
@@ -200,6 +201,9 @@ if __name__ == '__main__':
     parser.add_argument('-a', '--max-age', type=int, default=-1, help='Only download emails newer than (since) X days')
     parser.add_argument('-e', '--exclude', type=str, nargs='+', help='List mailboxes to exclude from downloading')
     parser.add_argument('-i', '--include', type=str, nargs='+', help='List mailboxes to include (only those specified will be downloaded)')
+    parser.add_argument('--txt', action='store_true', help='Include mail txt')
+    parser.add_argument('--html', action='store_true', help='Include mail html')
+    parser.add_argument('--files', action='store_true', help='Include mail attachments')
 
     args = parser.parse_args()
 
