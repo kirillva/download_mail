@@ -5,9 +5,105 @@ import argparse
 from mailbox import mbox
 from datetime import datetime, timedelta
 import email
-import base64
+# import base64
 from email import policy
 from email.parser import BytesParser
+from bs4 import BeautifulSoup
+
+def merge_html_files_with_separators(input_dir, input_files, output_file, 
+                                    start_separator="начало письма", 
+                                    end_separator="конец письма",
+                                    encoding='utf-8'):
+    """
+    Объединяет несколько HTML файлов в один с разделителями.
+    
+    Args:
+        input_files (list): Список путей к входным HTML файлам
+        output_file (str): Путь к выходному файлу
+        start_separator (str): Текст для разделителя начала
+        end_separator (str): Текст для разделителя конца
+        encoding (str): Кодировка файлов
+    """
+    
+    with open(output_file, 'w', encoding=encoding) as out_f:
+        # Создаем основную структуру HTML для объединенного файла
+        out_f.write('<!DOCTYPE html>\n<html>\n<head>\n')
+        out_f.write('<meta charset="UTF-8">\n')
+        out_f.write('<title>Объединенные письма</title>\n')
+        out_f.write('</head>\n<body>\n')
+        
+        for i, input_file in enumerate(input_files, 1):
+            try:
+                with open(os.path.join(input_dir, input_file), 'r', encoding=encoding) as in_f:
+                    html_content = in_f.read()
+                
+                # Извлекаем только тело письма (без тегов html, head, body)
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
+                # Удаляем лишние теги, если они есть
+                for tag in ['html', 'head', 'body']:
+                    if soup.find(tag):
+                        tag_content = soup.find(tag)
+                        if tag_content:
+                            tag_content.unwrap()
+                
+                # Добавляем разделитель начала
+                out_f.write(f'<div>\n')
+                out_f.write(f'<h3>= {start_separator} {i} =</h3>\n')
+                out_f.write('<hr>\n')
+                
+                # Добавляем содержимое письма
+                out_f.write(str(soup))
+                
+                # Добавляем разделитель конца
+                out_f.write(f'<hr>\n')
+                out_f.write(f'<h3>= {end_separator} {i} =</h3>\n')
+                out_f.write('</div>\n\n')
+                
+                print(f"Файл {input_file} успешно добавлен")
+                
+            except Exception as e:
+                print(f"Ошибка при обработке файла {input_file}: {e}")
+                # Добавляем сообщение об ошибке в выходной файл
+                out_f.write(f'<div style="border: 2px solid red; padding: 10px; margin: 20px 0; background-color: #ffe6e6;">\n')
+                out_f.write(f'<h3 style="color: red;">ОШИБКА: {start_separator} {i}</h3>\n')
+                out_f.write(f'<p>Не удалось загрузить файл: {input_file}</p>\n')
+                out_f.write(f'<p>Ошибка: {str(e)}</p>\n')
+                out_f.write(f'<h3 style="color: red;">{end_separator} {i}</h3>\n')
+                out_f.write('</div>\n\n')
+        
+        # Закрываем HTML структуру
+        out_f.write('</body>\n</html>')
+    
+    print(f"\nВсе файлы объединены в: {output_file}")
+
+def remove_styles_from_html(html_content):
+    """
+    Удаляет стили из HTML-контента.
+    
+    Args:
+        html_content (str): Исходный HTML-контент
+    
+    Returns:
+        str: Оптимизированный HTML без стилей
+    """
+    # Создаем объект BeautifulSoup
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Удаляем все теги <style>
+    for style_tag in soup.find_all('style'):
+        style_tag.decompose()
+    
+    # Удаляем атрибуты style у всех элементов
+    for tag in soup.find_all(attrs={'style': True}):
+        del tag['style']
+    
+    # Удаляем атрибуты class у всех элементов (если нужно)
+    for tag in soup.find_all(attrs={'class': True}):
+        del tag['class']
+    
+    # Возвращаем оптимизированный HTML
+    return str(soup)
 
 # Function for converting downloaded mailboxes from EML to Mbox format
 def convert_to_mbox(mailbox_folder):
@@ -57,16 +153,16 @@ def process_eml_file(file_name, input_dir, output_dir='output'):
                 payload = part.get_payload(decode=True)
                 charset = part.get_content_charset() or 'utf-8'
                 html_body = payload.decode(charset, errors='ignore')
+                html_body = remove_styles_from_html(html_body)
+            # elif part.get_filename():  # Вложение
+            #     filename = part.get_filename()
+            #     content = part.get_payload(decode=True)
                 
-            elif part.get_filename():  # Вложение
-                filename = part.get_filename()
-                content = part.get_payload(decode=True)
-                
-                # Сохраняем вложение
-                filepath = os.path.join(output_dir, filename)
-                with open(filepath, 'wb') as f:
-                    f.write(content)
-                print(f"Сохранено вложение: {filename}")
+            #     # Сохраняем вложение
+            #     filepath = os.path.join(output_dir, filename)
+            #     with open(filepath, 'wb') as f:
+            #         f.write(content)
+            #     print(f"Сохранено вложение: {filename}")
     else:
         # Не multipart письмо
         payload = msg.get_payload(decode=True)
@@ -251,4 +347,10 @@ if __name__ == '__main__':
         # Чтение EML файла
         process_eml_file(filepath, input_dir=mailbox_folder_path, output_dir=os.path.join('txt', mailbox_folder_path))
     
+
+    merge_html_files_with_separators(os.path.join('txt', mailbox_folder_path),
+                                    os.listdir(os.path.join('txt', mailbox_folder_path)), 
+                                    os.path.join('txt', mailbox_folder_path, 
+                                    'result.html'))
+        
     print('All mailboxes and their contents have been decoded successfully!')
