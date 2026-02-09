@@ -4,6 +4,7 @@ import imaplib
 import argparse
 from mailbox import mbox
 from datetime import datetime, timedelta
+import email
 # import base64
 from email import policy
 from email.parser import BytesParser
@@ -12,7 +13,8 @@ from bs4 import BeautifulSoup
 def merge_html_files_with_separators(input_dir, input_files, output_file, 
                                     start_separator="начало письма", 
                                     end_separator="конец письма",
-                                    encoding='utf-8'):
+                                    encoding='utf-8',
+                                    batch=100):
     """
     Объединяет несколько HTML файлов в один с разделителями.
     
@@ -24,7 +26,10 @@ def merge_html_files_with_separators(input_dir, input_files, output_file,
         encoding (str): Кодировка файлов
     """
     
-    with open(output_file, 'w', encoding=encoding) as out_f:
+    
+    summary_file = os.path.join(output_file, 'result.html')
+    
+    with open(summary_file, 'w', encoding=encoding) as out_f:
         # Создаем основную структуру HTML для объединенного файла
         out_f.write('<!DOCTYPE html>\n<html>\n<head>\n')
         out_f.write('<meta charset="UTF-8">\n')
@@ -74,7 +79,7 @@ def merge_html_files_with_separators(input_dir, input_files, output_file,
         # Закрываем HTML структуру
         out_f.write('</body>\n</html>')
     
-    print(f"\nВсе файлы объединены в: {output_file}")
+    print(f"\nВсе файлы объединены в: {summary_file}")
 
 def remove_styles_from_html(html_content):
     """
@@ -197,10 +202,10 @@ if __name__ == '__main__':
     parser.add_argument('password', type=str, help='Yandex email account password')
     parser.add_argument('-m', '--mbox', action='store_true', help='Convert downloaded mailboxes to Mbox format')
     parser.add_argument('-s', '--sync', action='store_true', help='Delete local email files that are not on the server')
-    parser.add_argument('--min-age', type=int, default=-1, help='Only download emails older than (before) X days')
     parser.add_argument('-a', '--max-age', type=int, default=-1, help='Only download emails newer than (since) X days')
     parser.add_argument('-e', '--exclude', type=str, nargs='+', help='List mailboxes to exclude from downloading')
     parser.add_argument('-i', '--include', type=str, nargs='+', help='List mailboxes to include (only those specified will be downloaded)')
+    parser.add_argument('--batch', type=int, default=100, help='Batch size N mails')
     parser.add_argument('--txt', action='store_true', help='Include mail txt')
     parser.add_argument('--html', action='store_true', help='Include mail html')
     parser.add_argument('--files', action='store_true', help='Include mail attachments')
@@ -261,16 +266,10 @@ if __name__ == '__main__':
         # Select mailbox
         try:
             connection.select('"' + mailbox_name + '"' if (' ' in mailbox_name or not mailbox_name.isascii()) else mailbox_name, readonly=True)
-            if (args.min_age > 0):
-                min_date = (datetime.today() - timedelta(days=args.min_date)).strftime('%d-%b-%Y')
-                
-            if (args.max_age > 0):
-                max_date = (datetime.today() - timedelta(days=args.max_age)).strftime('%d-%b-%Y')
 
-            if (args.min_age > 0 and args.max_age > 0):
-                typ, data = connection.uid('SEARCH', None, f'SINCE {max_date} BEFORE {min_date}')
-            elif (args.max_age > 0):
-                typ, data = connection.uid('SEARCH', None, f'SINCE {max_date}')
+            if(args.max_age > 0):
+                cutoff_date = (datetime.today() - timedelta(days=args.max_age)).strftime('%d-%b-%Y')
+                typ, data = connection.uid('SEARCH', None, f'SINCE {cutoff_date}')
             else:
                 typ, data = connection.uid('SEARCH', None, 'ALL')
         except Exception as e:
@@ -360,7 +359,7 @@ if __name__ == '__main__':
 
     merge_html_files_with_separators(os.path.join('txt', mailbox_folder_path),
                                     os.listdir(os.path.join('txt', mailbox_folder_path)), 
-                                    os.path.join('txt', mailbox_folder_path, 
-                                    'result.html'))
+                                    os.path.join('txt', mailbox_folder_path),
+                                    batch=args.batch)
         
     print('All mailboxes and their contents have been decoded successfully!')
