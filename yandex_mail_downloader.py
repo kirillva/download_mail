@@ -356,6 +356,7 @@ if __name__ == '__main__':
     parser.add_argument('--txt', action='store_true', help='Include mail txt')
     parser.add_argument('--html', action='store_true', help='Include mail html')
     parser.add_argument('--files', action='store_true', help='Include mail attachments')
+    parser.add_argument('--unseen', action='store_true', help='Include unseen only')
 
     args = parser.parse_args()
 
@@ -409,16 +410,22 @@ if __name__ == '__main__':
 
         # Create necessary directories recursively
         os.makedirs(mailbox_folder_path, exist_ok=True)
-
+        
         # Select mailbox
         try:
             connection.select('"' + mailbox_name + '"' if (' ' in mailbox_name or not mailbox_name.isascii()) else mailbox_name, readonly=True)
 
-            if(args.max_age > 0):
+            if args.unseen:
+                # Скачиваем только непрочитанные письма
+                typ, data = connection.uid('SEARCH', None, 'UNSEEN')
+            elif args.max_age > 0:
+                # Фильтр по дате: непрочитанные письма старше указанного возраста
                 cutoff_date = (datetime.today() - timedelta(days=args.max_age)).strftime('%d-%b-%Y')
-                typ, data = connection.uid('SEARCH', None, f'SINCE {cutoff_date}')
+                typ, data = connection.uid('SEARCH', None, f'(SINCE {cutoff_date})')
             else:
+                # Все письма
                 typ, data = connection.uid('SEARCH', None, 'ALL')
+                
         except Exception as e:
             print(f'Error: Failed to select mailbox {mailbox_name_canonical}')
             print(str(e))
