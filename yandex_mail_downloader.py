@@ -321,9 +321,9 @@ def process_eml_file(file_name, input_dir, output_dir='output'):
         charset = msg.get_content_charset() or 'utf-8'
         text_body = payload.decode(charset, errors='ignore')
     
-    if head:
-        with open(os.path.join(output_dir, f'{file_name}.txt'), 'w', encoding='utf-8') as f:
-            f.write(head)
+    # if head:
+    #     with open(os.path.join(output_dir, f'{file_name}.txt'), 'w', encoding='utf-8') as f:
+    #         f.write(head)
     
     # Сохраняем текст письма
     if text_body and args.txt:
