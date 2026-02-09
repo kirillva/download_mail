@@ -4,7 +4,6 @@ import imaplib
 import argparse
 from mailbox import mbox
 from datetime import datetime, timedelta
-import email
 # import base64
 from email import policy
 from email.parser import BytesParser
@@ -198,6 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('password', type=str, help='Yandex email account password')
     parser.add_argument('-m', '--mbox', action='store_true', help='Convert downloaded mailboxes to Mbox format')
     parser.add_argument('-s', '--sync', action='store_true', help='Delete local email files that are not on the server')
+    parser.add_argument('--min-age', type=int, default=-1, help='Only download emails older than (before) X days')
     parser.add_argument('-a', '--max-age', type=int, default=-1, help='Only download emails newer than (since) X days')
     parser.add_argument('-e', '--exclude', type=str, nargs='+', help='List mailboxes to exclude from downloading')
     parser.add_argument('-i', '--include', type=str, nargs='+', help='List mailboxes to include (only those specified will be downloaded)')
@@ -261,10 +261,16 @@ if __name__ == '__main__':
         # Select mailbox
         try:
             connection.select('"' + mailbox_name + '"' if (' ' in mailbox_name or not mailbox_name.isascii()) else mailbox_name, readonly=True)
+            if (args.min_age > 0):
+                min_date = (datetime.today() - timedelta(days=args.min_date)).strftime('%d-%b-%Y')
+                
+            if (args.max_age > 0):
+                max_date = (datetime.today() - timedelta(days=args.max_age)).strftime('%d-%b-%Y')
 
-            if(args.max_age > 0):
-                cutoff_date = (datetime.today() - timedelta(days=args.max_age)).strftime('%d-%b-%Y')
-                typ, data = connection.uid('SEARCH', None, f'SINCE {cutoff_date}')
+            if (args.min_age > 0 and args.max_age > 0):
+                typ, data = connection.uid('SEARCH', None, f'SINCE {max_date} BEFORE {min_date}')
+            elif (args.max_age > 0):
+                typ, data = connection.uid('SEARCH', None, f'SINCE {max_date}')
             else:
                 typ, data = connection.uid('SEARCH', None, 'ALL')
         except Exception as e:
