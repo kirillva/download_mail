@@ -17,69 +17,216 @@ def merge_html_files_with_separators(input_dir, input_files, output_file,
                                     batch=100):
     """
     Объединяет несколько HTML файлов в один с разделителями.
+    Создает общий файл result.html и отдельные файлы по batch писем.
     
     Args:
+        input_dir (str): Директория с входными HTML файлами
         input_files (list): Список путей к входным HTML файлам
-        output_file (str): Путь к выходному файлу
+        output_file (str): Путь к выходной директории
         start_separator (str): Текст для разделителя начала
         end_separator (str): Текст для разделителя конца
         encoding (str): Кодировка файлов
+        batch (int): Размер пачки писем для создания отдельных файлов
     """
     
+    # Создаем выходную директорию, если она не существует
+    os.makedirs(output_file, exist_ok=True)
     
+    # Общий файл со всеми письмами
     summary_file = os.path.join(output_file, 'result.html')
     
+    # Для хранения содержимого писем для batch-файлов
+    batches = []
+    current_batch = []
+    
+    # Базовый HTML шаблон
+    html_header = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="{encoding}">
+<title>Объединенные письма</title>
+<style>
+body{{font-family:Arial,sans-serif;margin:20px}}
+.separator{{background:#f0f0f0;padding:10px;margin:20px 0;border-left:4px solid #007bff}}
+.error{{border:2px solid red;padding:10px;margin:20px 0;background:#ffe6e6}}
+.letter{{margin:30px 0;padding:15px;border:1px solid #ddd;border-radius:5px}}
+</style>
+</head>
+<body>
+<h1>Объединенные письма</h1>
+<p>Всего писем: {len(input_files)} | Размер пачки: {batch} писем</p>
+<hr>
+'''
+    
+    html_footer = '''
+</body>
+</html>'''
+    
+    # Batch HTML шаблон
+    batch_header = '''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="{encoding}">
+<title>Письма {start_idx}-{end_idx}</title>
+<style>
+body{{font-family:Arial,sans-serif;margin:20px}}
+.separator{{background:#f0f0f0;padding:10px;margin:20px 0;border-left:4px solid #007bff}}
+.error{{border:2px solid red;padding:10px;margin:20px 0;background:#ffe6e6}}
+.letter{{margin:30px 0;padding:15px;border:1px solid #ddd;border-radius:5px}}
+</style>
+</head>
+<body>
+<h1>Письма {start_idx}-{end_idx}</h1>
+<p>Всего писем в пачке: {batch_size}</p>
+<hr>
+'''
+    
+    batch_footer = '</body>\n</html>'
+    
     with open(summary_file, 'w', encoding=encoding) as out_f:
-        # Создаем основную структуру HTML для объединенного файла
-        out_f.write('<!DOCTYPE html>\n<html>\n<head>\n')
-        out_f.write('<meta charset="UTF-8">\n')
-        out_f.write('<title>Объединенные письма</title>\n')
-        out_f.write('</head>\n<body>\n')
+        # Записываем заголовок
+        out_f.write(html_header)
         
         for i, input_file in enumerate(input_files, 1):
             try:
-                with open(os.path.join(input_dir, input_file), 'r', encoding=encoding) as in_f:
+                file_path = os.path.join(input_dir, input_file)
+                with open(file_path, 'r', encoding=encoding) as in_f:
                     html_content = in_f.read()
                 
-                # Извлекаем только тело письма (без тегов html, head, body)
+                # Извлекаем содержимое письма
                 soup = BeautifulSoup(html_content, 'html.parser')
                 
-                # Удаляем лишние теги, если они есть
+                # Удаляем лишние теги
                 for tag in ['html', 'head', 'body']:
                     if soup.find(tag):
                         tag_content = soup.find(tag)
                         if tag_content:
                             tag_content.unwrap()
                 
-                # Добавляем разделитель начала
-                out_f.write(f'<div>\n')
-                out_f.write(f'<h3>= {start_separator} {i} =</h3>\n')
-                out_f.write('<hr>\n')
+                # Готовим HTML письма
+                letter_html = f'<div class="letter">'
+                letter_html += f'<div class="separator"><h3>= {start_separator} {i} =</h3><p>Файл: {input_file}</p></div><hr>'
+                letter_html += str(soup)
+                letter_html += f'<hr><div class="separator"><h3>= {end_separator} {i} =</h3></div></div>'
                 
-                # Добавляем содержимое письма
-                out_f.write(str(soup))
+                # Записываем в общий файл
+                out_f.write(letter_html + '\n')
                 
-                # Добавляем разделитель конца
-                out_f.write(f'<hr>\n')
-                out_f.write(f'<h3>= {end_separator} {i} =</h3>\n')
-                out_f.write('</div>\n\n')
+                # Добавляем в текущую пачку
+                current_batch.append({
+                    'index': i,
+                    'filename': input_file,
+                    'content': letter_html,
+                    'success': True
+                })
                 
-                print(f"Файл {input_file} успешно добавлен")
+                print(f"Файл {input_file} успешно добавлен (#{i})")
                 
             except Exception as e:
-                print(f"Ошибка при обработке файла {input_file}: {e}")
-                # Добавляем сообщение об ошибке в выходной файл
-                out_f.write(f'<div style="border: 2px solid red; padding: 10px; margin: 20px 0; background-color: #ffe6e6;">\n')
-                out_f.write(f'<h3 style="color: red;">ОШИБКА: {start_separator} {i}</h3>\n')
-                out_f.write(f'<p>Не удалось загрузить файл: {input_file}</p>\n')
-                out_f.write(f'<p>Ошибка: {str(e)}</p>\n')
-                out_f.write(f'<h3 style="color: red;">{end_separator} {i}</h3>\n')
-                out_f.write('</div>\n\n')
+                print(f"Ошибка при обработке {input_file}: {e}")
+                
+                # HTML для ошибки
+                error_html = f'<div class="letter error"><h3>ОШИБКА: {start_separator} {i}</h3>'
+                error_html += f'<p>Файл: {input_file}</p><p>Ошибка: {str(e)}</p>'
+                error_html += f'<h3>{end_separator} {i}</h3></div>'
+                
+                out_f.write(error_html + '\n')
+                
+                # Добавляем ошибку в пачку
+                current_batch.append({
+                    'index': i,
+                    'filename': input_file,
+                    'content': error_html,
+                    'success': False,
+                    'error': str(e)
+                })
+            
+            # Создаем batch-файл если набралась пачка или это последний файл
+            if len(current_batch) == batch or i == len(input_files):
+                if current_batch:
+                    batch_number = len(batches) + 1
+                    start_idx = current_batch[0]['index']
+                    end_idx = current_batch[-1]['index']
+                    
+                    batch_file_name = f'batch_{batch_number:03d}_{start_idx}-{end_idx}.html'
+                    batch_file_path = os.path.join(output_file, batch_file_name)
+                    
+                    # Создаем batch-файл
+                    with open(batch_file_path, 'w', encoding=encoding) as batch_f:
+                        # Заголовок batch-файла
+                        batch_f.write(batch_header.format(
+                            encoding=encoding,
+                            start_idx=start_idx,
+                            end_idx=end_idx,
+                            batch_size=len(current_batch)
+                        ))
+                        
+                        # Содержимое писем
+                        for letter in current_batch:
+                            batch_f.write(letter['content'] + '\n')
+                        
+                        batch_f.write(batch_footer)
+                    
+                    print(f"Создан batch-файл: {batch_file_name}")
+                    batches.append({
+                        'filename': batch_file_name,
+                        'path': batch_file_path,
+                        'letters': current_batch.copy(),
+                        'range': (start_idx, end_idx)
+                    })
+                    
+                    # Очищаем пачку
+                    current_batch = []
         
-        # Закрываем HTML структуру
-        out_f.write('</body>\n</html>')
+        # Добавляем список batch-файлов в общий файл
+        if batches:
+            out_f.write('\n<hr>\n<div style="margin-top:40px;padding:20px;background:#f8f9fa;border-radius:5px">')
+            out_f.write('<h2>Созданные файлы пачек:</h2><ul>')
+            
+            for i, batch_info in enumerate(batches, 1):
+                start_idx, end_idx = batch_info['range']
+                out_f.write(f'<li><a href="{batch_info["filename"]}">Пачка {i}: письма {start_idx}-{end_idx}</a></li>')
+            
+            out_f.write('</ul></div>')
+        
+        # Закрываем общий файл
+        out_f.write(html_footer)
     
-    print(f"\nВсе файлы объединены в: {summary_file}")
+    # Вывод статистики
+    print(f"\n✓ Общий файл: {summary_file}")
+    print(f"✓ Создано batch-файлов: {len(batches)}")
+    
+    return summary_file, batches
+
+
+# Упрощенная версия функции для обработки директории
+def process_directory(input_dir, output_dir, batch_size=100):
+    """
+    Обрабатывает все HTML файлы в директории.
+    
+    Args:
+        input_dir (str): Путь к директории с HTML файлами
+        output_dir (str): Путь к выходной директории
+        batch_size (int): Размер пачки писем
+    """
+    
+    # Получаем HTML файлы
+    html_files = [f for f in os.listdir(input_dir) if f.lower().endswith(('.html', '.htm'))]
+    html_files.sort()
+    
+    if not html_files:
+        print("Нет HTML файлов для обработки")
+        return
+    
+    print(f"Найдено {len(html_files)} HTML файлов")
+    
+    # Обрабатываем файлы
+    result = merge_html_files_with_separators(
+        input_dir, html_files, output_dir,
+        batch=batch_size
+    )
+    
+    return result
 
 def remove_styles_from_html(html_content):
     """
